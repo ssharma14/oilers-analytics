@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  /* Oilers Colors */
+  --color-oilers-navy: #041E42;
+  --color-oilers-orange: #FF4C00;
+  --color-oilers-copper: #B45309;
+  --color-oilers-white: #FFFFFF;
+
+  /* App Colors */
+  --color-background: #0a0a0a;
+  --color-surface: #1a1a2e;
+  --color-surface-light: #252542;
+  --color-accent: #FF4C00;
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+
+  /* Chart Colors */
+  --color-chart-goal: #22c55e;
+  --color-chart-shot: #3b82f6;
+  --color-chart-miss: #6b7280;
+  --color-chart-block: #9333ea;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-oilers-white);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-oilers-orange);
+}
+
+/* Chart container styles */
+.chart-container {
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid var(--color-surface-light);
+}
+
+/* Stat card glow effect */
+.stat-card {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-light) 100%);
+  border: 1px solid var(--color-surface-light);
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  border-color: var(--color-oilers-orange);
+  box-shadow: 0 0 20px rgba(255, 76, 0, 0.2);
+}
+
+/* Loading animation */
+@keyframes pulse-orange {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.loading-pulse {
+  animation: pulse-orange 2s infinite;
+}
