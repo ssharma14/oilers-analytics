@@ -1,7 +1,15 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
 
-const cache = new NodeCache({ stdTTL: 300 }); // 5 minute cache
+// Different cache TTLs for different data types
+const cache = new NodeCache({ stdTTL: 300 }); // 5 minute default
+const CACHE_TTL = {
+  roster: 3600,      // 1 hour - roster rarely changes
+  teamStats: 900,    // 15 minutes
+  schedule: 600,     // 10 minutes
+  player: 600,       // 10 minutes
+  game: 300,         // 5 minutes - game data more dynamic
+};
 const NHL_API_BASE = 'https://api-web.nhle.com';
 const OILERS_ABBREV = 'EDM';
 
@@ -59,12 +67,16 @@ export interface RosterSpot {
 }
 
 // Get cached data or fetch fresh
-async function getCachedOrFetch<T>(key: string, fetchFn: () => Promise<T>): Promise<T> {
+async function getCachedOrFetch<T>(key: string, fetchFn: () => Promise<T>, ttl?: number): Promise<T> {
   const cached = cache.get<T>(key);
   if (cached) return cached;
 
   const data = await fetchFn();
-  cache.set(key, data);
+  if (ttl) {
+    cache.set(key, data, ttl);
+  } else {
+    cache.set(key, data);
+  }
   return data;
 }
 
@@ -78,7 +90,7 @@ export async function getOilersRoster(): Promise<Player[]> {
       ...response.data.goalies
     ];
     return roster;
-  });
+  }, CACHE_TTL.roster);
 }
 
 // Get player details
@@ -129,7 +141,7 @@ export async function getTeamStats() {
       goalsFor: oilersStats.goalFor,       // API uses singular
       goalsAgainst: oilersStats.goalAgainst // API uses singular
     };
-  });
+  }, CACHE_TTL.teamStats);
 }
 
 // Extract shots from play-by-play

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Header } from './Header';
 import { ShotMap } from '../visualizations/ShotMap';
 import { GameFlow } from '../visualizations/GameFlow';
@@ -9,12 +9,10 @@ import { StatCard } from '../ui/StatCard';
 import { GameSelector } from '../ui/GameSelector';
 import { PlayerSelector } from '../ui/PlayerSelector';
 import {
-  useOilersRoster,
-  useOilersGames,
+  useInitialData,
   useGameShots,
   useCorsiData,
   useGameScorers,
-  useTeamStats,
   usePlayerStats
 } from '../../hooks/useNHLData';
 import { formatPercent } from '../../utils/statsCalculations';
@@ -22,6 +20,33 @@ import { formatPercent } from '../../utils/statsCalculations';
 // Default player IDs (McDavid and Draisaitl)
 const MCDAVID_ID = 8478402;
 const DRAISAITL_ID = 8477934;
+
+// Loading screen component
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+      <div className="text-center">
+        {/* Oilers logo placeholder / spinner */}
+        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-oilers-orange animate-pulse flex items-center justify-center">
+          <svg className="w-12 h-12 text-oilers-navy animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-white mb-2">Edmonton Oilers Analytics</h2>
+        <p className="text-gray-400 mb-4">{message}</p>
+        <div className="flex justify-center gap-1">
+          <div className="w-2 h-2 bg-oilers-orange rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+          <div className="w-2 h-2 bg-oilers-orange rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+          <div className="w-2 h-2 bg-oilers-orange rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+        </div>
+        <p className="text-gray-500 text-sm mt-6">
+          First load may take up to 60 seconds while the server wakes up
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // Type for NHL API player landing response
 interface NHLPlayerResponse {
@@ -72,25 +97,63 @@ export function Dashboard() {
   const [selectedPlayer1, setSelectedPlayer1] = useState<number | null>(MCDAVID_ID);
   const [selectedPlayer2, setSelectedPlayer2] = useState<number | null>(DRAISAITL_ID);
 
-  // Fetch data
-  const { data: roster, loading: rosterLoading } = useOilersRoster();
-  const { data: games, loading: gamesLoading } = useOilersGames();
+  // Fetch all initial data in one request (roster, games, teamStats, default player stats)
+  const { data: initialData, loading: initialLoading, error: initialError } = useInitialData(MCDAVID_ID, DRAISAITL_ID);
+
+  // Extract data from combined response
+  const roster = initialData?.roster || null;
+  const games = initialData?.games || null;
+  const teamStats = initialData?.teamStats || null;
+
+  // Fetch game-specific data (only after a game is selected)
   const { data: shots } = useGameShots(selectedGameId);
   const { data: corsiData } = useCorsiData(selectedGameId);
   const { data: gameScorers } = useGameScorers(selectedGameId);
-  const { data: teamStats } = useTeamStats();
 
-  // Fetch player stats for comparison
-  const { data: player1Raw } = usePlayerStats(selectedPlayer1);
-  const { data: player2Raw } = usePlayerStats(selectedPlayer2);
+  // Fetch player stats - use initial data for default players, fetch fresh for changed selections
+  const { data: player1Raw } = usePlayerStats(
+    selectedPlayer1 !== MCDAVID_ID ? selectedPlayer1 : null
+  );
+  const { data: player2Raw } = usePlayerStats(
+    selectedPlayer2 !== DRAISAITL_ID ? selectedPlayer2 : null
+  );
+
+  // Use initial data for default players, or fetched data for changed selections
+  const player1StatsRaw = selectedPlayer1 === MCDAVID_ID ? initialData?.player1Stats : player1Raw;
+  const player2StatsRaw = selectedPlayer2 === DRAISAITL_ID ? initialData?.player2Stats : player2Raw;
 
   // Transform player data
-  const player1Data = transformPlayerData(player1Raw);
-  const player2Data = transformPlayerData(player2Raw);
+  const player1Data = transformPlayerData(player1StatsRaw);
+  const player2Data = transformPlayerData(player2StatsRaw);
 
   // Auto-select first game if none selected
-  if (!selectedGameId && games && games.length > 0) {
-    setSelectedGameId(games[0].id);
+  useEffect(() => {
+    if (!selectedGameId && games && games.length > 0) {
+      setSelectedGameId(games[0].id);
+    }
+  }, [games, selectedGameId]);
+
+  // Show loading screen while initial data loads
+  if (initialLoading) {
+    return <LoadingScreen message="Connecting to server and loading data..." />;
+  }
+
+  // Show error screen
+  if (initialError) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-red-500 mb-2">Connection Error</h2>
+          <p className="text-gray-400 mb-4">{initialError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-oilers-orange text-white rounded hover:bg-orange-600 transition"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Fallback data while loading
@@ -112,7 +175,7 @@ export function Dashboard() {
           games={games || []}
           selectedGameId={selectedGameId}
           onSelect={setSelectedGameId}
-          loading={gamesLoading}
+          loading={false}
         />
       </Header>
 
@@ -185,14 +248,14 @@ export function Dashboard() {
                 selectedPlayerId={selectedPlayer1}
                 onSelect={setSelectedPlayer1}
                 label="Player 1"
-                loading={rosterLoading}
+                loading={false}
               />
               <PlayerSelector
                 players={roster || []}
                 selectedPlayerId={selectedPlayer2}
                 onSelect={setSelectedPlayer2}
                 label="Player 2"
-                loading={rosterLoading}
+                loading={false}
               />
             </div>
             <PlayerRadar

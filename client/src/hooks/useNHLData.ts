@@ -2,7 +2,91 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import type { Player, Game, Shot, XGLeader, TeamStats, CorsiData } from '../types/hockey';
 
-const API_BASE = 'https://oilers-analytics-api.onrender.com/api';
+// Use relative URL in development (proxied by Vite), absolute URL in production
+const API_BASE = import.meta.env.DEV
+  ? '/api'
+  : 'https://oilers-analytics-api.onrender.com/api';
+
+// Server connection status
+export type ServerStatus = 'connecting' | 'connected' | 'error';
+
+// Hook to wake up the server and track connection status
+export function useServerWarmup() {
+  const [status, setStatus] = useState<ServerStatus>('connecting');
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const maxRetries = 3;
+
+    const pingServer = async () => {
+      try {
+        await axios.get(`${API_BASE}/health`, { timeout: 60000 }); // 60s timeout for cold start
+        if (!cancelled) setStatus('connected');
+      } catch (error) {
+        if (!cancelled) {
+          if (retryCount < maxRetries) {
+            setRetryCount(prev => prev + 1);
+            // Retry after a short delay
+            setTimeout(pingServer, 2000);
+          } else {
+            setStatus('error');
+          }
+        }
+      }
+    };
+
+    pingServer();
+    return () => { cancelled = true; };
+  }, [retryCount]);
+
+  return { status, retryCount };
+}
+
+// Interface for combined initial data response
+interface InitialData {
+  roster: Player[];
+  games: Game[];
+  teamStats: TeamStats;
+  player1Stats: any;
+  player2Stats: any;
+}
+
+// Hook to fetch all initial data in one request
+export function useInitialData(player1Id: number, player2Id: number) {
+  const [data, setData] = useState<InitialData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchInitialData = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE}/initial`, {
+          params: { player1: player1Id, player2: player2Id },
+          timeout: 90000, // 90s timeout for cold start + data fetch
+        });
+        if (!cancelled) {
+          setData(response.data);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load data');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchInitialData();
+    return () => { cancelled = true; };
+  }, [player1Id, player2Id]);
+
+  return { data, loading, error };
+}
 
 // Generic hook for API calls with loading/error states
 function useApiCall<T>(
