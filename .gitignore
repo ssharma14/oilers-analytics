@@ -5,3 +5,6 @@ node_modules/
   client/dist/                                                                                                                  
   server/node_modules/                                                                                                          
   server/dist/
+
+# build/backup archives
+*.zip
